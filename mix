@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+
+import shutil
+import os
+import sys
+import argparse
+import getpass
+import secrets
+from pathlib import Path
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from argon2.low_level import hash_secret_raw, Type
+
+MAGIC = bytes.fromhex("116d6978")
+MAGIC_LEN = len(MAGIC)
+SALT_LEN = 16
+NONCE_LEN = 12
+KEY_LEN = 32
+TIME_COST = 3
+MEMORY_COST = 2097152
+PARALLELISM = 1
+
+def derive_key(password: bytes, salt: bytes) -> bytes:
+    return hash_secret_raw(
+        secret=password,
+        salt=salt,
+        time_cost=TIME_COST,
+        memory_cost=MEMORY_COST,
+        parallelism=PARALLELISM,
+        hash_len=KEY_LEN,
+        type=Type.ID
+    )
+
+def encrypt_file(input_path: Path, force: bool, preserve: bool):
+    output_path = input_path.with_name(input_path.name + ".mix")
+    if os.path.isfile(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    if os.path.exists(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    try:
+        plaintext = input_path.read_bytes()
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        sys.exit(1)
+    if os.path.isfile(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    password1 = getpass.getpass("Enter password: ").encode('utf-8')
+    password2 = getpass.getpass("Confirm password: ").encode('utf-8')
+    if password1 != password2:
+        print("Passwords do not match.")
+        sys.exit(1)
+    salt = secrets.token_bytes(SALT_LEN)
+    nonce = secrets.token_bytes(NONCE_LEN)
+    key = derive_key(password1, salt)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
+    output_data = MAGIC + salt + nonce + ciphertext
+    if os.path.isfile(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    try:
+        output_path.write_bytes(output_data)
+        if preserve:
+            shutil.copystat(input_path, output_path)
+        print(f"Encryption successful. Output written to {output_path}")
+    except Exception as e:
+        print(f"Error writing output file: {e}")
+        sys.exit(1)
+
+def decrypt_file(input_path: Path, force: bool, preserve: bool):
+    if input_path.suffix != ".mix":
+        print("Error: To decrypt, the input file must have a .mix extension.")
+        sys.exit(1)
+    output_path = input_path.with_suffix("")
+    if os.path.isfile(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    if os.path.exists(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    try:
+        data = input_path.read_bytes()
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        sys.exit(1)
+    if not data.startswith(MAGIC):
+        print("Error: File does not contain the expected magic header; cannot decrypt.")
+        sys.exit(1)
+    pos = MAGIC_LEN
+    salt = data[pos:pos+SALT_LEN]
+    pos += SALT_LEN
+    nonce = data[pos:pos+NONCE_LEN]
+    pos += NONCE_LEN
+    ciphertext = data[pos:]
+    password = getpass.getpass("Enter password: ").encode('utf-8')
+    key = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    try:
+        plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
+    except Exception as e:
+        print("Decryption failed. Possibly incorrect password or corrupted data.")
+        sys.exit(1)
+    if os.path.isfile(str(output_path)) and not force:
+        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        sys.exit(1)
+    try:
+        output_path.write_bytes(plaintext)
+        if preserve:
+            shutil.copystat(input_path, output_path)
+        print(f"Decryption successful. Output written to {output_path}")
+    except Exception as e:
+        print(f"Error writing output file: {e}")
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="Encrypt or decrypt files using AES-GCM and Argon2id.")
+    parser.add_argument("input", type=Path, help="Input file")
+    parser.add_argument("-f", "--force", action="store_true", help="force overwrite of output file")
+    parser.add_argument("-p", "--preserve", action="store_true", help="preserve original timestamps")
+    args = parser.parse_args()
+    if not args.input.exists():
+        print(f"Error: Input file {args.input} does not exist.")
+        sys.exit(1)
+    try:
+        with args.input.open("rb") as f:
+            header = f.read(MAGIC_LEN)
+    except Exception as e:
+        print(f"Error reading input file: {e}")
+        sys.exit(1)
+    if header == MAGIC:
+        decrypt_file(args.input, args.force, args.preserve)
+    else:
+        encrypt_file(args.input, args.force, args.preserve)
+
+if __name__ == "__main__":
+    main()

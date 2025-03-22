@@ -61,3 +61,19 @@ now, you have an securely encrypted file `database.csv.mix`. if you store the `k
 
 mix-lite uses virtually zero PBKDF and takes only ~60ms to encrypt data. it uses Argon2id with minimal settings, for simplicity
 
+## mix-dump to extract information
+
+if you want to see the nonce or salt of an encrypted file, use
+
+```
+$ mix-dump database.csv.mix
+Header  mix
+Salt    ce bc f0 9f a5 9a 65 61 73 74 65 72 20 65 67 67
+Nonce   ad 42 86 6d 69 78 99 44 c3 16 96 30
+Cipher  36 bytes
+Algo    AES-GCM
+PBKDF   Argon2id
+MEMORY  2097152 bytes
+TIME    3 iterations
+PARALL  1 threads
+```

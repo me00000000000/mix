@@ -1,5 +1,5 @@
 <h1 align=center>mix</h1>
-<p align=center>Extremely simple tool to encrypt files with AES-GCM and Argon2id</p>
+<p align=center>Extremely simple tool to encrypt files with AES-CTR+HMAC using Argon2id</p>
 
 ```
   -f, --force           force overwrite of output file

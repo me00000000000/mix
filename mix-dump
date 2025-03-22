@@ -5,10 +5,10 @@ import argparse
 from pathlib import Path
 
 MAGIC = bytes.fromhex("116d6978")
-MAGIC_LEN = len(MAGIC)
+MAGIC_LITE = bytes.fromhex("116d69786c697465")
 SALT_LEN = 16
 NONCE_LEN = 12
-    
+
 def dump(input_path: Path):
     try:
         data = input_path.read_bytes()
@@ -16,12 +16,21 @@ def dump(input_path: Path):
         print(f"Error reading input file: {e}")
         sys.exit(1)
 
-    if not data.startswith(MAGIC):
+    if data.startswith(MAGIC_LITE):
+        header = "mix-lite"
+        header_len = len(MAGIC_LITE)
+    elif data.startswith(MAGIC):
+        header = "mix"
+        header_len = len(MAGIC)
+    else:
         print("Error: File is not a mix encrypted file.")
         sys.exit(1)
 
-    pos = MAGIC_LEN
-    salt = data[pos:pos+SALT_LEN]    
+    print("Header ", header)
+
+    pos = header_len
+
+    salt = data[pos:pos+SALT_LEN]
     salt_hex = salt.hex()
     print("Salt    ", end="")
     formatted_salt = " ".join(salt_hex[i:i+2] for i in range(0, len(salt_hex), 2))
@@ -35,24 +44,23 @@ def dump(input_path: Path):
     pos += NONCE_LEN
 
     ciphertext = data[pos:]
-    print("Cipher ", len(data[pos:]), "bytes")
+    print("Cipher ", len(ciphertext), "bytes")
 
     print("Algo   ", "AES-GCM")
     print("PBKDF  ", "Argon2id")
-    print("MEMORY ", "2097152")
-    print("TIME   ", "3")
-    print("PARALL ", "1")    
+    if header == "mix":
+        print("MEMORY ", "2097152", "bytes")
+        print("TIME   ", "3", "iterations")
+    else:
+        print("MEMORY ", "8", "bytes")
+        print("TIME   ", "1", "iterations")
+
+    print("PARALL ", "1", "threads")    
 
 def main():
-    parser = argparse.ArgumentParser(description="Dump information abuot mix encrypted files.")
+    parser = argparse.ArgumentParser(description="Dump information about mix encrypted files.")
     parser.add_argument("input", type=Path, help="Input file")
     args = parser.parse_args()
-    try:
-        with args.input.open("rb") as f:
-            header = f.read(MAGIC_LEN)
-    except Exception as e:
-        print(f"Error reading input file: {e}")
-        sys.exit(1)
     dump(args.input)
 
 if __name__ == "__main__":

@@ -9,14 +9,21 @@ from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from argon2.low_level import hash_secret_raw, Type
 
-MAGIC = bytes.fromhex("116d6978")
+if os.path.basename(sys.argv[0]) == 'mix':
+    MAGIC = bytes.fromhex("116d6978")
+    TIME_COST = 3
+    MEMORY_COST = 2097152
+    PARALLELISM = 1
+elif os.path.basename(sys.argv[0]) == 'mix-lite':
+    MAGIC = bytes.fromhex("116d69786c697465")
+    TIME_COST = 1
+    MEMORY_COST = 8
+    PARALLELISM = 1
+
 MAGIC_LEN = len(MAGIC)
 SALT_LEN = 16
 NONCE_LEN = 12
 KEY_LEN = 32
-TIME_COST = 3
-MEMORY_COST = 2097152
-PARALLELISM = 1
 
 def derive_key(password: bytes, salt: bytes) -> bytes:
     return hash_secret_raw(

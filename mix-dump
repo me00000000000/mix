@@ -6,6 +6,7 @@ from pathlib import Path
 
 MAGIC = bytes.fromhex("116d6978")
 MAGIC_LITE = bytes.fromhex("116d69786c697465")
+MAGIC_PARANOID = bytes.fromhex("116d69786e6f6964")
 SALT_LEN = 16
 NONCE_LEN = 12
 
@@ -19,6 +20,9 @@ def dump(input_path: Path):
     if data.startswith(MAGIC_LITE):
         header = "mix-lite"
         header_len = len(MAGIC_LITE)
+    elif data.startswith(MAGIC_PARANOID):
+        header = "mix-paranoid"
+        header_len = len(MAGIC_PARANOID)
     elif data.startswith(MAGIC):
         header = "mix"
         header_len = len(MAGIC)
@@ -51,6 +55,9 @@ def dump(input_path: Path):
     if header == "mix":
         print("MEMORY ", "2097152", "bytes")
         print("TIME   ", "3", "iterations")
+    elif header == "mix-paranoid":
+        print("MEMORY ", "2097152", "bytes")
+        print("TIME   ", "8", "iterations")
     else:
         print("MEMORY ", "8", "bytes")
         print("TIME   ", "1", "iterations")

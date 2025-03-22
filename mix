@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import shutil
 import os
 import sys
@@ -9,29 +10,38 @@ from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from argon2.low_level import hash_secret_raw, Type
 
-if os.path.basename(sys.argv[0]) == 'mix':
-    MAGIC = bytes.fromhex("116d6978")
-    TIME_COST = 3
-    MEMORY_COST = 2097152
-    PARALLELISM = 1
-elif os.path.basename(sys.argv[0]) == 'mix-lite':
-    MAGIC = bytes.fromhex("116d69786c697465")
-    TIME_COST = 1
-    MEMORY_COST = 8
-    PARALLELISM = 1
+PARAMS = {
+    "mix": {
+        "magic": bytes.fromhex("116d6978"),
+        "time_cost": 3,
+        "memory_cost": 2097152,
+        "parallelism": 1
+    },
+    "mix-paranoid": {
+        "magic": bytes.fromhex("116d69786e6f6964"),
+        "time_cost": 8,
+        "memory_cost": 2097152,
+        "parallelism": 1
+    },
+    "mix-lite": {
+        "magic": bytes.fromhex("116d69786c697465"),
+        "time_cost": 1,
+        "memory_cost": 8,
+        "parallelism": 1
+    }
+}
 
-MAGIC_LEN = len(MAGIC)
 SALT_LEN = 16
 NONCE_LEN = 12
 KEY_LEN = 32
 
-def derive_key(password: bytes, salt: bytes) -> bytes:
+def derive_key(password: bytes, salt: bytes, time_cost: int, memory_cost: int, parallelism: int) -> bytes:
     return hash_secret_raw(
         secret=password,
         salt=salt,
-        time_cost=TIME_COST,
-        memory_cost=MEMORY_COST,
-        parallelism=PARALLELISM,
+        time_cost=time_cost,
+        memory_cost=memory_cost,
+        parallelism=parallelism,
         hash_len=KEY_LEN,
         type=Type.ID
     )
@@ -50,6 +60,19 @@ def get_password(confirm: bool = False, use_stdin: bool = False) -> bytes:
         return pwd1.encode('utf-8')
     return getpass.getpass("Enter password: ").encode('utf-8')
 
+def get_decryption_params(data: bytes):
+    if data.startswith(PARAMS["mix-paranoid"]["magic"]):
+        return ("mix-paranoid", PARAMS["mix-paranoid"]["magic"], len(PARAMS["mix-paranoid"]["magic"]),
+                PARAMS["mix-paranoid"]["time_cost"], PARAMS["mix-paranoid"]["memory_cost"], PARAMS["mix-paranoid"]["parallelism"])
+    elif data.startswith(PARAMS["mix-lite"]["magic"]):
+        return ("mix-lite", PARAMS["mix-lite"]["magic"], len(PARAMS["mix-lite"]["magic"]),
+                PARAMS["mix-lite"]["time_cost"], PARAMS["mix-lite"]["memory_cost"], PARAMS["mix-lite"]["parallelism"])
+    elif data.startswith(PARAMS["mix"]["magic"]):
+        return ("mix", PARAMS["mix"]["magic"], len(PARAMS["mix"]["magic"]),
+                PARAMS["mix"]["time_cost"], PARAMS["mix"]["memory_cost"], PARAMS["mix"]["parallelism"])
+    else:
+        return None
+
 def encrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool, use_stdin: bool):
     try:
         plaintext = input_path.read_bytes()
@@ -59,10 +82,12 @@ def encrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool,
     password = get_password(confirm=True, use_stdin=use_stdin)
     salt = secrets.token_bytes(SALT_LEN)
     nonce = secrets.token_bytes(NONCE_LEN)
-    key = derive_key(password, salt)
+    program_name = os.path.basename(sys.argv[0])
+    params = PARAMS.get(program_name, PARAMS["mix"])
+    key = derive_key(password, salt, params["time_cost"], params["memory_cost"], params["parallelism"])
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
-    output_data = MAGIC + salt + nonce + ciphertext
+    output_data = params["magic"] + salt + nonce + ciphertext
 
     if to_stdout:
         try:
@@ -85,25 +110,22 @@ def encrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool,
             sys.exit(1)
 
 def decrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool, use_stdin: bool):
-    if input_path.suffix != ".mix":
-        print("Error: To decrypt, the input file must have a .mix extension.", file=sys.stderr)
-        sys.exit(1)
     try:
         data = input_path.read_bytes()
     except Exception as e:
         print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
-    if not data.startswith(MAGIC):
-        print("Error: File does not contain the expected magic header; cannot decrypt.", file=sys.stderr)
-        sys.exit(1)
-    pos = MAGIC_LEN
+    params_tuple = get_decryption_params(data)
+    header_type, magic, magic_len, time_cost, memory_cost, parallelism = params_tuple
+    print(f"Header type found: {header_type}")
+    pos = magic_len
     salt = data[pos:pos+SALT_LEN]
     pos += SALT_LEN
     nonce = data[pos:pos+NONCE_LEN]
     pos += NONCE_LEN
     ciphertext = data[pos:]
     password = get_password(confirm=False, use_stdin=use_stdin)
-    key = derive_key(password, salt)
+    key = derive_key(password, salt, time_cost, memory_cost, parallelism)
     aesgcm = AESGCM(key)
     try:
         plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
@@ -134,20 +156,28 @@ def encrypt_data(plaintext: bytes, use_stdin: bool) -> bytes:
     password = get_password(confirm=True, use_stdin=use_stdin)
     salt = secrets.token_bytes(SALT_LEN)
     nonce = secrets.token_bytes(NONCE_LEN)
-    key = derive_key(password, salt)
+    program_name = os.path.basename(sys.argv[0])
+    params = PARAMS.get(program_name, PARAMS["mix"])
+    key = derive_key(password, salt, params["time_cost"], params["memory_cost"], params["parallelism"])
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
-    return MAGIC + salt + nonce + ciphertext
+    return params["magic"] + salt + nonce + ciphertext
 
 def decrypt_data(data: bytes, use_stdin: bool) -> bytes:
-    pos = MAGIC_LEN
+    params_tuple = get_decryption_params(data)
+    if params_tuple is None:
+        print("Error: Unrecognized file header; cannot decrypt.", file=sys.stderr)
+        sys.exit(1)
+    header_type, magic, magic_len, time_cost, memory_cost, parallelism = params_tuple
+    print(f"Header type found: {header_type}")
+    pos = magic_len
     salt = data[pos:pos+SALT_LEN]
     pos += SALT_LEN
     nonce = data[pos:pos+NONCE_LEN]
     pos += NONCE_LEN
     ciphertext = data[pos:]
     password = get_password(confirm=False, use_stdin=use_stdin)
-    key = derive_key(password, salt)
+    key = derive_key(password, salt, time_cost, memory_cost, parallelism)
     aesgcm = AESGCM(key)
     return aesgcm.decrypt(nonce, ciphertext, associated_data=None)
 
@@ -168,7 +198,7 @@ def main():
         if not args.stdout:
             print("Error: When piping input data, the -o/--stdout flag must be provided.", file=sys.stderr)
             sys.exit(1)
-        if input_data.startswith(MAGIC):
+        if get_decryption_params(input_data) is not None:
             try:
                 plaintext = decrypt_data(input_data, use_stdin=False)
             except Exception:
@@ -199,11 +229,11 @@ def main():
             sys.exit(1)
         try:
             with args.input.open("rb") as f:
-                header = f.read(MAGIC_LEN)
+                header = f.read(8)
         except Exception as e:
             print(f"Error reading input file: {e}", file=sys.stderr)
             sys.exit(1)
-        if header == MAGIC:
+        if get_decryption_params(header) is not None:
             decrypt_file(args.input, args.force, args.preserve, args.stdout, args.password_stdin)
         else:
             encrypt_file(args.input, args.force, args.preserve, args.stdout, args.password_stdin)

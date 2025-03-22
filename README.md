@@ -37,14 +37,6 @@ $ echo password | mix -P database.csv
 
 this works, but avoid typing the password with echo, or other users in the system may see it in a list of running processes
 
-a completely secure alternative is catting a secure key in a file (for example `openssl rand 20 | base32 > key` - raw bytes aren't supported) 
-
-```
-$ cat key | mix -P database.csv
-```
-
-now, you have an securely encrypted file `database.csv.mix`. if you store the `key` file, then you can use this for things like cloud backups
-
 also, you can encrypt the contents from STDIN without the -P option:
 
 ```
@@ -54,3 +46,18 @@ Confirm password:
 ```
 
 always remembe to use -o when using STDIN contents, otherwise it cannot output to a file, because there's no origin file (to add or remove with the .mix extension)
+
+### mix-lite with key files
+
+a completely secure alternative is catting a secure key into mix-lite (for example, use `openssl rand 20 | base32 > key` - raw bytes aren't supported), and then
+
+```
+$ cat key | mix-lite -P database.csv
+```
+
+now, you have an securely encrypted file `database.csv.mix`. if you store the `key` file, then you can use this for things like cloud backups
+
+*note: using mix-lite in this example, because PBKDF is pointless and time-wasting if the password (key file) has over 160 bits of security*
+
+mix-lite uses virtually zero PBKDF and takes only ~60ms to encrypt data. it uses Argon2id with minimal settings, for simplicity
+

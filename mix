@@ -117,7 +117,7 @@ def decrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool,
         sys.exit(1)
     params_tuple = get_decryption_params(data)
     header_type, magic, magic_len, time_cost, memory_cost, parallelism = params_tuple
-    print(f"Header type found: {header_type}")
+    print(f"Header type found: {header_type}", file=sys.stderr)
     pos = magic_len
     salt = data[pos:pos+SALT_LEN]
     pos += SALT_LEN
@@ -165,11 +165,8 @@ def encrypt_data(plaintext: bytes, use_stdin: bool) -> bytes:
 
 def decrypt_data(data: bytes, use_stdin: bool) -> bytes:
     params_tuple = get_decryption_params(data)
-    if params_tuple is None:
-        print("Error: Unrecognized file header; cannot decrypt.", file=sys.stderr)
-        sys.exit(1)
     header_type, magic, magic_len, time_cost, memory_cost, parallelism = params_tuple
-    print(f"Header type found: {header_type}")
+    print(f"Header type found: {header_type}", file=sys.stderr)
     pos = magic_len
     salt = data[pos:pos+SALT_LEN]
     pos += SALT_LEN

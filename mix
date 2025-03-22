@@ -29,8 +29,8 @@ def derive_key(password: bytes, salt: bytes) -> bytes:
         type=Type.ID
     )
 
-def get_password(confirm: bool = False) -> bytes:
-    if not sys.stdin.isatty():
+def get_password(confirm: bool = False, use_stdin: bool = False) -> bytes:
+    if use_stdin and not sys.stdin.isatty():
         pwd = sys.stdin.read().strip()
         if pwd:
             return pwd.encode('utf-8')
@@ -38,52 +38,56 @@ def get_password(confirm: bool = False) -> bytes:
         pwd1 = getpass.getpass("Enter password: ")
         pwd2 = getpass.getpass("Confirm password: ")
         if pwd1 != pwd2:
-            print("Passwords do not match.")
+            print("Passwords do not match.", file=sys.stderr)
             sys.exit(1)
         return pwd1.encode('utf-8')
     return getpass.getpass("Enter password: ").encode('utf-8')
 
-def encrypt_file(input_path: Path, force: bool, preserve: bool):
-    output_path = input_path.with_name(input_path.name + ".mix")
-    if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
-        sys.exit(1)
+def encrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool, use_stdin: bool):
     try:
         plaintext = input_path.read_bytes()
     except Exception as e:
-        print(f"Error reading input file: {e}")
+        print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
-    password = get_password(confirm=True)
+    password = get_password(confirm=True, use_stdin=use_stdin)
     salt = secrets.token_bytes(SALT_LEN)
     nonce = secrets.token_bytes(NONCE_LEN)
     key = derive_key(password, salt)
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
     output_data = MAGIC + salt + nonce + ciphertext
-    try:
-        output_path.write_bytes(output_data)
-        if preserve:
-            shutil.copystat(input_path, output_path)
-        print(f"Encryption successful. Output written to {output_path}")
-    except Exception as e:
-        print(f"Error writing output file: {e}")
-        sys.exit(1)
 
-def decrypt_file(input_path: Path, force: bool, preserve: bool):
+    if to_stdout:
+        try:
+            sys.stdout.buffer.write(output_data)
+        except Exception as e:
+            print(f"Error writing to STDOUT: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        output_path = input_path.with_name(input_path.name + ".mix")
+        if output_path.is_file() and not force:
+            print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            output_path.write_bytes(output_data)
+            if preserve:
+                shutil.copystat(input_path, output_path)
+            print(f"Encryption successful. Output written to {output_path}")
+        except Exception as e:
+            print(f"Error writing output file: {e}", file=sys.stderr)
+            sys.exit(1)
+
+def decrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool, use_stdin: bool):
     if input_path.suffix != ".mix":
-        print("Error: To decrypt, the input file must have a .mix extension.")
-        sys.exit(1)
-    output_path = input_path.with_suffix("")
-    if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
+        print("Error: To decrypt, the input file must have a .mix extension.", file=sys.stderr)
         sys.exit(1)
     try:
         data = input_path.read_bytes()
     except Exception as e:
-        print(f"Error reading input file: {e}")
+        print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
     if not data.startswith(MAGIC):
-        print("Error: File does not contain the expected magic header; cannot decrypt.")
+        print("Error: File does not contain the expected magic header; cannot decrypt.", file=sys.stderr)
         sys.exit(1)
     pos = MAGIC_LEN
     salt = data[pos:pos+SALT_LEN]
@@ -91,42 +95,111 @@ def decrypt_file(input_path: Path, force: bool, preserve: bool):
     nonce = data[pos:pos+NONCE_LEN]
     pos += NONCE_LEN
     ciphertext = data[pos:]
-    password = get_password(confirm=False)
+    password = get_password(confirm=False, use_stdin=use_stdin)
     key = derive_key(password, salt)
     aesgcm = AESGCM(key)
     try:
         plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
     except Exception as e:
-        print("Decryption failed. Possibly incorrect password or corrupted data.")
+        print("Decryption failed. Possibly incorrect password or corrupted data.", file=sys.stderr)
         sys.exit(1)
-    try:
-        output_path.write_bytes(plaintext)
-        if preserve:
-            shutil.copystat(input_path, output_path)
-        print(f"Decryption successful. Output written to {output_path}")
-    except Exception as e:
-        print(f"Error writing output file: {e}")
-        sys.exit(1)
+    if to_stdout:
+        try:
+            sys.stdout.buffer.write(plaintext)
+        except Exception as e:
+            print(f"Error writing to STDOUT: {e}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        output_path = input_path.with_suffix("")
+        if output_path.is_file() and not force:
+            print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            output_path.write_bytes(plaintext)
+            if preserve:
+                shutil.copystat(input_path, output_path)
+            print(f"Decryption successful. Output written to {output_path}")
+        except Exception as e:
+            print(f"Error writing output file: {e}", file=sys.stderr)
+            sys.exit(1)
+
+def encrypt_data(plaintext: bytes, use_stdin: bool) -> bytes:
+    password = get_password(confirm=True, use_stdin=use_stdin)
+    salt = secrets.token_bytes(SALT_LEN)
+    nonce = secrets.token_bytes(NONCE_LEN)
+    key = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
+    return MAGIC + salt + nonce + ciphertext
+
+def decrypt_data(data: bytes, use_stdin: bool) -> bytes:
+    pos = MAGIC_LEN
+    salt = data[pos:pos+SALT_LEN]
+    pos += SALT_LEN
+    nonce = data[pos:pos+NONCE_LEN]
+    pos += NONCE_LEN
+    ciphertext = data[pos:]
+    password = get_password(confirm=False, use_stdin=use_stdin)
+    key = derive_key(password, salt)
+    aesgcm = AESGCM(key)
+    return aesgcm.decrypt(nonce, ciphertext, associated_data=None)
 
 def main():
-    parser = argparse.ArgumentParser(description="Encrypt or decrypt files using AES-GCM and Argon2id.")
-    parser.add_argument("input", type=Path, help="Input file")
+    parser = argparse.ArgumentParser(
+        description="Encrypt or decrypt files using AES-GCM and Argon2id. "
+                    "If piped input is available (and -P is not used), it is used as the input data."
+    )
+    parser.add_argument("input", type=Path, nargs="?", help="Input file (ignored if piped input is available)")
     parser.add_argument("-f", "--force", action="store_true", help="force overwrite of output file")
     parser.add_argument("-p", "--preserve", action="store_true", help="preserve original timestamps")
+    parser.add_argument("-o", "--stdout", action="store_true", help="output the result to STDOUT instead of a file")
+    parser.add_argument("-P", "--password-stdin", action="store_true", help="read password from STDIN")
     args = parser.parse_args()
-    if not args.input.exists():
-        print(f"Error: Input file {args.input} does not exist.")
-        sys.exit(1)
-    try:
-        with args.input.open("rb") as f:
-            header = f.read(MAGIC_LEN)
-    except Exception as e:
-        print(f"Error reading input file: {e}")
-        sys.exit(1)
-    if header == MAGIC:
-        decrypt_file(args.input, args.force, args.preserve)
+
+    if not args.password_stdin and not sys.stdin.isatty():
+        input_data = sys.stdin.buffer.read()
+        if not args.stdout:
+            print("Error: When piping input data, the -o/--stdout flag must be provided.", file=sys.stderr)
+            sys.exit(1)
+        if input_data.startswith(MAGIC):
+            try:
+                plaintext = decrypt_data(input_data, use_stdin=False)
+            except Exception:
+                print("Decryption failed. Possibly incorrect password or corrupted data.", file=sys.stderr)
+                sys.exit(1)
+            try:
+                sys.stdout.buffer.write(plaintext)
+            except Exception as e:
+                print(f"Error writing to STDOUT: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            try:
+                output_data = encrypt_data(input_data, use_stdin=False)
+            except Exception as e:
+                print(f"Encryption failed: {e}", file=sys.stderr)
+                sys.exit(1)
+            try:
+                sys.stdout.buffer.write(output_data)
+            except Exception as e:
+                print(f"Error writing to STDOUT: {e}", file=sys.stderr)
+                sys.exit(1)
     else:
-        encrypt_file(args.input, args.force, args.preserve)
+        if args.input is None:
+            print("Error: No input file specified.", file=sys.stderr)
+            sys.exit(1)
+        if not args.input.exists():
+            print(f"Error: Input file {args.input} does not exist.", file=sys.stderr)
+            sys.exit(1)
+        try:
+            with args.input.open("rb") as f:
+                header = f.read(MAGIC_LEN)
+        except Exception as e:
+            print(f"Error reading input file: {e}", file=sys.stderr)
+            sys.exit(1)
+        if header == MAGIC:
+            decrypt_file(args.input, args.force, args.preserve, args.stdout, args.password_stdin)
+        else:
+            encrypt_file(args.input, args.force, args.preserve, args.stdout, args.password_stdin)
 
 if __name__ == "__main__":
     main()

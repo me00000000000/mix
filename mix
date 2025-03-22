@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import shutil
 import os
 import sys
@@ -30,12 +29,23 @@ def derive_key(password: bytes, salt: bytes) -> bytes:
         type=Type.ID
     )
 
+def get_password(confirm: bool = False) -> bytes:
+    if not sys.stdin.isatty():
+        pwd = sys.stdin.read().strip()
+        if pwd:
+            return pwd.encode('utf-8')
+    if confirm:
+        pwd1 = getpass.getpass("Enter password: ")
+        pwd2 = getpass.getpass("Confirm password: ")
+        if pwd1 != pwd2:
+            print("Passwords do not match.")
+            sys.exit(1)
+        return pwd1.encode('utf-8')
+    return getpass.getpass("Enter password: ").encode('utf-8')
+
 def encrypt_file(input_path: Path, force: bool, preserve: bool):
     output_path = input_path.with_name(input_path.name + ".mix")
     if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
-        sys.exit(1)
-    if os.path.exists(str(output_path)) and not force:
         print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
         sys.exit(1)
     try:
@@ -43,23 +53,13 @@ def encrypt_file(input_path: Path, force: bool, preserve: bool):
     except Exception as e:
         print(f"Error reading input file: {e}")
         sys.exit(1)
-    if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
-        sys.exit(1)
-    password1 = getpass.getpass("Enter password: ").encode('utf-8')
-    password2 = getpass.getpass("Confirm password: ").encode('utf-8')
-    if password1 != password2:
-        print("Passwords do not match.")
-        sys.exit(1)
+    password = get_password(confirm=True)
     salt = secrets.token_bytes(SALT_LEN)
     nonce = secrets.token_bytes(NONCE_LEN)
-    key = derive_key(password1, salt)
+    key = derive_key(password, salt)
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, plaintext, associated_data=None)
     output_data = MAGIC + salt + nonce + ciphertext
-    if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
-        sys.exit(1)
     try:
         output_path.write_bytes(output_data)
         if preserve:
@@ -77,9 +77,6 @@ def decrypt_file(input_path: Path, force: bool, preserve: bool):
     if os.path.isfile(str(output_path)) and not force:
         print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
         sys.exit(1)
-    if os.path.exists(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
-        sys.exit(1)
     try:
         data = input_path.read_bytes()
     except Exception as e:
@@ -94,16 +91,13 @@ def decrypt_file(input_path: Path, force: bool, preserve: bool):
     nonce = data[pos:pos+NONCE_LEN]
     pos += NONCE_LEN
     ciphertext = data[pos:]
-    password = getpass.getpass("Enter password: ").encode('utf-8')
+    password = get_password(confirm=False)
     key = derive_key(password, salt)
     aesgcm = AESGCM(key)
     try:
         plaintext = aesgcm.decrypt(nonce, ciphertext, associated_data=None)
     except Exception as e:
         print("Decryption failed. Possibly incorrect password or corrupted data.")
-        sys.exit(1)
-    if os.path.isfile(str(output_path)) and not force:
-        print(f"Error: Output file {output_path} already exists. Use -f to force overwrite.")
         sys.exit(1)
     try:
         output_path.write_bytes(plaintext)

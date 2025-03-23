@@ -91,11 +91,19 @@ PARALL  1 threads
 
 ## benchmarks (using mix-lite)
 
-| File Size    | Encryption Time |
-|--------------|-----------------|
-| 1MB          | ~80ms           |
-| 16MB         | ~100ms          |
-| 128MB        | ~250ms          |
-| 512MB        | ~766ms          |
+| Size  | Avg. time (ms)    |
+|-------|-------------------|
+| 4 MB  | 74                |
+| 8 MB  | 82                |
+| 16 MB | 85                |
+| 32 MB | 98                |
+| 64 MB | 122               |
+| 128 MB| 180               |
+| 256 MB| 298               |
+| 512 MB| 501               |
+| 1 GB  | 921               |
+| 2 GB  | 1845              |
+| 4 GB  | 3401              |
+| 8 GB  | 7420              |
 
 <sub>CC BY-SA 4.0</sub>

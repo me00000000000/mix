@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/bash
 
 if test $(basename $0) == "install.sh"
 then

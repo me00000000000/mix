@@ -88,3 +88,4 @@ MEMORY  2097152 bytes
 TIME    3 iterations
 PARALL  1 threads
 ```
+<sub>CC BY-SA 4.0</sub>

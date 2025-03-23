@@ -61,6 +61,16 @@ now, you have an securely encrypted file `database.csv.mix`. if you store the `k
 
 mix-lite uses virtually zero PBKDF and takes only ~60ms to encrypt data. it uses Argon2id with minimal settings, for simplicity
 
+### mix-paranoid
+
+there is also a maximized Argon2id option, which uses ~10 seconds to derivate the password, but uses the same memory as default mix. there is no "interactive" version fifty-fifgy lite-paranoid, since that wouldn't make sense
+
+#### modes
+
+- **lite** is for cases when you know your password is absolutely secure **(>144 bits)** and you dispense without PBKDF (mainly when using key files)
+- **paranoid** is the opposite of lite, for cases when you your password has a tradeoff of memorability and security (which is NOT RECOMMENDED to do, always use >70 bit passwords), but you may also just use it for "paranoia"; if you have 10 seconds, you may as well use them
+- **normal** mode is for cases when you know your password is absolutely secure and you dispense without PBKDF is for regular cases, it uses lots of memory and ~5 seconds which are *bastante*
+
 ## mix-dump to extract information
 
 if you want to see the nonce or salt of an encrypted file, use

@@ -88,4 +88,14 @@ MEMORY  2097152 bytes
 TIME    3 iterations
 PARALL  1 threads
 ```
+
+## benchmarks (using mix-lite)
+
+| File Size    | Encryption Time |
+|--------------|-----------------|
+| 1MB          | ~80ms           |
+| 16MB         | ~100ms          |
+| 128MB        | ~250ms          |
+| 512MB        | ~766ms          |
+
 <sub>CC BY-SA 4.0</sub>

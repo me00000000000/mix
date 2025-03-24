@@ -78,9 +78,10 @@ def get_decryption_params(data: bytes):
         return None
 
 def encrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool, use_stdin: bool):
-    if input_path.with_name(input_path.name + ".mix").is_file() and not force:
-        print(f"Error: Output file {input_path.with_name(input_path.name + ".mix")} already exists. Use -f to force overwrite.", file=sys.stderr)
-        sys.exit(1)
+    if not to_stdout:
+        if input_path.with_name(input_path.name + ".mix").is_file() and not force:
+            print(f"Error: Output file {input_path.with_name(input_path.name + ".mix")} already exists. Use -f to force overwrite.", file=sys.stderr)
+            sys.exit(1)
 
     password = get_password(confirm=True, use_stdin=use_stdin)
     salt = secrets.token_bytes(SALT_LEN)
@@ -128,9 +129,10 @@ def decrypt_file(input_path: Path, force: bool, preserve: bool, to_stdout: bool,
         print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if input_path.with_suffix("").is_file() and not force:
-        print(f"Error: Output file {input_path.with_suffix("")} already exists. Use -f to force overwrite.", file=sys.stderr)
-        sys.exit(1)
+    if not to_stdout:
+        if input_path.with_suffix("").is_file() and not force:
+            print(f"Error: Output file {input_path.with_suffix("")} already exists. Use -f to force overwrite.", file=sys.stderr)
+            sys.exit(1)
 
     out_file = None
 

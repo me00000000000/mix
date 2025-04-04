@@ -79,14 +79,14 @@ if you want to see the nonce or salt of an encrypted file, use
 $ mix-dump database.csv.mix
 Header  mix
 Salt    ce bc f0 9f a5 9a 65 61 73 74 65 72 20 65 67 67
-Nonce   ad 42 86 6d 69 78 99 44 c3 16 96 30 3c 5d e2 6e
+IV      ad 42 86 6d 69 78 99 44 c3 16 96 30 3c 5d e2 6e
 Cipher  36 bytes
 HMAC    32 bytes
 Algo    AES-CTR + HMAC
 PBKDF   Argon2id
-MEMORY  2097152 bytes
-TIME    3 iterations
-PARALL  1 threads
+MEMORY  1048576 bytes
+TIME    4 iterations
+PARALL  4 threads
 ```
 
 ## benchmarks (using mix-lite)

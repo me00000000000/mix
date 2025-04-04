@@ -21,15 +21,15 @@ CHUNK_SIZE = 64 * 1024
 PARAMS = {
     "mix": {
         "magic": bytes.fromhex("116d6978"),
-        "time_cost": 3,
-        "memory_cost": 2097152,
-        "parallelism": 1
+        "time_cost": 4,
+        "memory_cost": 1048576,
+        "parallelism": 4
     },
     "mix-paranoid": {
         "magic": bytes.fromhex("116d69786e6f6964"),
         "time_cost": 8,
         "memory_cost": 2097152,
-        "parallelism": 1
+        "parallelism": 4
     },
     "mix-lite": {
         "magic": bytes.fromhex("116d69786c697465"),

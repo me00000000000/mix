@@ -4,12 +4,32 @@ import sys
 import argparse
 from pathlib import Path
 
-MAGIC = bytes.fromhex("116d6978")
-MAGIC_LITE = bytes.fromhex("116d69786c697465")
-MAGIC_PARANOID = bytes.fromhex("116d69786e6f6964")
+KEY_LEN = 64
 SALT_LEN = 16
-NONCE_LEN = 16
+IV_LEN = 16
 HMAC_TAG_LEN = 32
+CHUNK_SIZE = 64 * 1024
+
+PARAMS = {
+    "mix": {
+        "magic": bytes.fromhex("116d6978"),
+        "time_cost": 4,
+        "memory_cost": 1048576,
+        "parallelism": 4
+    },
+    "mix-paranoid": {
+        "magic": bytes.fromhex("116d69786e6f6964"),
+        "time_cost": 8,
+        "memory_cost": 2097152,
+        "parallelism": 4
+    },
+    "mix-lite": {
+        "magic": bytes.fromhex("116d69786c697465"),
+        "time_cost": 1,
+        "memory_cost": 8,
+        "parallelism": 1
+    }
+}
 
 def dump(input_path: Path):
     try:
@@ -18,19 +38,18 @@ def dump(input_path: Path):
         print(f"Error reading input file: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if data.startswith(MAGIC_LITE):
-        header = "mix-lite"
-        header_len = len(MAGIC_LITE)
-        memory, time = 8, 1
-    elif data.startswith(MAGIC_PARANOID):
-        header = "mix-paranoid"
-        header_len = len(MAGIC_PARANOID)
-        memory, time = 2097152, 8
-    elif data.startswith(MAGIC):
-        header = "mix"
-        header_len = len(MAGIC)
-        memory, time = 2097152, 3
-    else:
+    header = None
+    for name, params in sorted(PARAMS.items(), key=lambda item: len(item[1]["magic"]), reverse=True):
+        magic = params["magic"]
+        if data.startswith(magic):
+            header = name
+            header_len = len(magic)
+            time_cost = params["time_cost"]
+            memory_cost = params["memory_cost"]
+            parallelism = params["parallelism"]
+            break
+
+    if header is None:
         print("Error: File is not a mix encrypted file.", file=sys.stderr)
         sys.exit(1)
 
@@ -39,20 +58,23 @@ def dump(input_path: Path):
     pos = header_len
     salt = data[pos:pos+SALT_LEN]
     pos += SALT_LEN
-    nonce = data[pos:pos+NONCE_LEN]
-    pos += NONCE_LEN
+    iv = data[pos:pos+IV_LEN]
+    pos += IV_LEN
     ciphertext = data[pos:-HMAC_TAG_LEN]
     hmac_tag = data[-HMAC_TAG_LEN:]
 
-    print(f"Salt    {' '.join(salt.hex()[i:i+2] for i in range(0, len(salt.hex()), 2))}")
-    print(f"Nonce   {' '.join(nonce.hex()[i:i+2] for i in range(0, len(nonce.hex()), 2))}")
+    salt_str = ' '.join(salt.hex()[i:i+2] for i in range(0, len(salt.hex()), 2))
+    iv_str = ' '.join(iv.hex()[i:i+2] for i in range(0, len(iv.hex()), 2))
+
+    print(f"Salt    {salt_str}")
+    print(f"IV      {iv_str}")
     print(f"Cipher  {len(ciphertext)} bytes")
     print(f"HMAC    {len(hmac_tag)} bytes")
     print("Algo    AES-CTR + HMAC")
     print("PBKDF   Argon2id")
-    print(f"MEMORY  {memory} bytes")
-    print(f"TIME    {time} iterations")
-    print("PARALL  1 threads")
+    print(f"MEMORY  {memory_cost} bytes")
+    print(f"TIME    {time_cost} iterations")
+    print(f"PARALL  {parallelism} threads")
 
 def main():
     parser = argparse.ArgumentParser(description="Dump information about mix encrypted files.")

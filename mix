@@ -22,7 +22,7 @@ PARAMS = {
     "mix": {
         "magic": bytes.fromhex("116d6978"),
         "time_cost": 4,
-        "memory_cost": 1048576,
+        "memory_cost": 131072,
         "parallelism": 4
     },
     "mix-paranoid": {

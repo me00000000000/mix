@@ -84,7 +84,7 @@ Cipher  36 bytes
 HMAC    32 bytes
 Algo    AES-CTR + HMAC
 PBKDF   Argon2id
-MEMORY  1048576 bytes
+MEMORY  131072 bytes
 TIME    4 iterations
 PARALL  4 threads
 ```
